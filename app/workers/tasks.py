@@ -4,7 +4,10 @@ from pathlib import Path
 from uuid import UUID
 
 import dramatiq
+import httpx
+import time
 
+from app.core.config import get_settings
 from app.db.models import OCRAttemptLog
 from app.db.repositories.jobs import JobRepository
 from app.db.repositories.results import ResultRepository
@@ -14,12 +17,14 @@ from app.services.image_storage import ImageStorageService
 from app.workers.broker import redis_broker  # noqa: F401
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 @dramatiq.actor(max_retries=3)
 def process_ocr_job(job_id: str) -> None:
     started = time.perf_counter()
     db = SessionLocal()
+    image_id = None
     try:
         jobs = JobRepository(db)
         results = ResultRepository(db)
@@ -29,8 +34,11 @@ def process_ocr_job(job_id: str) -> None:
             return
 
         image = job.image
+        image_id = image.id
         jobs.set_status(job, status="processing", progress=10)
         db.commit()
+
+        update_ocr_page_status.send(str(image.id), "processing")
 
         if not image.storage_path:
             raise RuntimeError("Image has no storage path")
@@ -81,6 +89,8 @@ def process_ocr_job(job_id: str) -> None:
         )
         db.commit()
 
+        post_ocr_result.send(str(image.id), str(result.normalized_text))
+
     except Exception as exc:
         logger.exception("OCR job failed", extra={"job_id": job_id})
         db.rollback()
@@ -94,6 +104,22 @@ def process_ocr_job(job_id: str) -> None:
                 error_message=str(exc),
             )
             db.commit()
+        if image_id is not None:
+            update_ocr_page_status.send(str(image_id), "failed")
         raise
     finally:
         db.close()
+
+
+@dramatiq.actor(max_retries=3)
+def update_ocr_page_status(image_id: str, status: str) -> None:
+    resp = httpx.post(f"{settings.api_admin_panel_url}/{image_id}/status", data={"status": status})
+    resp.raise_for_status()
+    logger.info(f"status send for image: {image_id}")
+
+
+@dramatiq.actor(max_retries=3)
+def post_ocr_result(image_id: str, text: str) -> None:
+    resp = httpx.post(f"{settings.api_admin_panel_url}/{image_id}/result", data={"text": text})
+    resp.raise_for_status()
+    logger.info(f"result send for image: {image_id}")

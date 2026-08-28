@@ -10,6 +10,8 @@ services:
     env_file:
       - .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
       - "8002:8000"
     volumes:
@@ -21,6 +23,8 @@ services:
     depends_on:
       - ocr-postgres
       - ocr-redis
+    networks:
+      - ocr-htr
 
   ocr-worker:
     build:
@@ -33,8 +37,10 @@ services:
     env_file:
       - .env
     mem_limit: 8g
-
+    
     command: dramatiq app.workers.tasks --processes 1 --threads 1
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     volumes:
       - .:/app
       - ./data/uploads:/app/data/uploads
@@ -44,6 +50,9 @@ services:
     depends_on:
       - ocr-postgres
       - ocr-redis
+    networks:
+      - ocr-htr
+
 
   ocr-postgres:
     image: postgres:16-alpine
@@ -56,12 +65,21 @@ services:
       - "5433:5432"
     volumes:
       - ocr-postgres-data:/var/lib/postgresql/data
+    networks:
+      - ocr-htr
+
 
   ocr-redis:
     image: redis:7-alpine
     container_name: museum-ocr-redis
     ports:
       - "6380:6379"
+    networks:
+      - ocr-htr
 
 volumes:
   ocr-postgres-data:
+
+networks:
+    ocr-htr:
+        driver: bridge

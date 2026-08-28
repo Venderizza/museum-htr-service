@@ -43,11 +43,11 @@ class Settings(BaseSettings):
 
     ocr_recognizer: str = "dummy"
 
-    ocr_trocr_model_name: str = "microsoft/trocr-base-handwritten"
-    ocr_trocr_model_path: Path = Path("./models/huggingface/microsoft/trocr-base-handwritten")
+    # ocr_trocr_model_name: str = "microsoft/trocr-base-handwritten"
+    # ocr_trocr_model_path: Path = Path("./models/huggingface/microsoft/trocr-base-handwritten")
 
-    # ocr_trocr_model_name: str = "Kansallisarkisto/cyrillic-htr-model"
-    # ocr_trocr_model_path: Path = Path("./models/huggingface/Kansallisarkisto/cyrillic-htr-model")
+    ocr_trocr_model_name: str = "Kansallisarkisto/cyrillic-htr-model"
+    ocr_trocr_model_path: Path = Path("./models/huggingface/Kansallisarkisto/cyrillic-htr-model")
     ocr_trocr_device: str = "cpu"
     ocr_trocr_max_new_tokens: int = 256
 
@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     log_format: str = "json"
 
     max_upload_size_bytes: int = Field(default=25 * 1024 * 1024)
+
+    api_admin_panel_url: str = "http://host.docker.internal:8000/api/scans"
 
     @property
     def database_url(self) -> str:

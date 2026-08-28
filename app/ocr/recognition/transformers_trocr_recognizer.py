@@ -26,14 +26,17 @@ class TransformersTrOCRRecognizer:
         recognized: list[RecognizedLine] = []
         for line in lines:
             if line.crop_path is None:
-                recognized.append(RecognizedLine(index=line.index, text="", confidence=None, bbox=line.bbox))
+                recognized.append(
+                    RecognizedLine(index=line.index, text="", confidence=None, bbox=line.bbox)
+                )
                 continue
 
             text = self._recognize_image(line.crop_path)
-            recognized.append(RecognizedLine(index=line.index, text=text, confidence=None, bbox=line.bbox))
+            recognized.append(
+                RecognizedLine(index=line.index, text=text, confidence=None, bbox=line.bbox)
+            )
 
         return recognized
-
 
     def _ensure_loaded(self) -> None:
         if self._processor is not None and self._model is not None:
@@ -48,21 +51,32 @@ class TransformersTrOCRRecognizer:
                 "Run `uv sync --extra ocr --group dev` or build Docker with INSTALL_OCR=true."
             ) from exc
 
-        model_source = self.model_name
+        if self.model_path.exists():
+            model_source = str(self.model_path)
 
-        self._processor = TrOCRProcessor.from_pretrained(
-            model_source
-        )
+            processor_path = self.model_path / "processor"
 
-        self._model = VisionEncoderDecoderModel.from_pretrained(
-            model_source
-        )
+            if not processor_path.exists():
+                raise FileNotFoundError(f"Processor directory not found: {processor_path}")
+
+            self._processor = TrOCRProcessor.from_pretrained(str(processor_path))
+
+            self._model = VisionEncoderDecoderModel.from_pretrained(model_source)
+
+        else:
+            model_source = self.model_name
+
+            self._processor = TrOCRProcessor.from_pretrained(
+                model_source,
+                subfolder="processor",
+            )
+
+            self._model = VisionEncoderDecoderModel.from_pretrained(model_source)
 
         self._model.to(self.device)
         self._model.eval()
 
         self._torch = torch
-        
 
     def _recognize_image(self, image_path: Path) -> str:
         assert self._processor is not None
